@@ -46,6 +46,7 @@ contract Voting is Whitelist {
     }
 
     function vote(uint candidateId) public {
+        require(checkWhitelist(msg.sender), "You are not in whitelist");
         require(block.timestamp <= endTime && block.timestamp >= startTime, "Voting is not active");
         require(!voted[msg.sender], "You have already voted");
         require(voteOpen, "Voting has ended");
