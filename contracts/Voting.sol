@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 import "./Whitelist.sol";
+import "./SecretVoting.sol";
 
-contract Voting is Whitelist {
+contract Voting is Whitelist, SecretVote  {
     address public admin;
     string[] public candidates;
     mapping (string => uint) public votes;
@@ -45,19 +46,39 @@ contract Voting is Whitelist {
         emit VotingTimesSet(startTime, endTime);
     }
 
-    function vote(uint candidateId) public {
-        require(checkWhitelist(msg.sender), "You are not in whitelist");
-        require(block.timestamp <= endTime && block.timestamp >= startTime, "Voting is not active");
-        require(!voted[msg.sender], "You have already voted");
-        require(voteOpen, "Voting has ended");
+    // function vote(uint candidateId) public {
+    //     require(checkWhitelist(msg.sender), "You are not in whitelist");
+    //     require(block.timestamp <= endTime && block.timestamp >= startTime, "Voting is not active");
+    //     require(!voted[msg.sender], "You have already voted");
+    //     require(voteOpen, "Voting has ended");
+    //     require(candidateId < candidates.length, "Invalid candidate ID");
+
+    //     votes[candidates[candidateId]]++;
+    //     voted[msg.sender] = true;
+    //     voterCount++;
+    //     emit Voted(msg.sender, candidates[candidateId]);
+    // }
+
+    function _registerVote(address voter, uint candidateId) internal {
         require(candidateId < candidates.length, "Invalid candidate ID");
+        require(!voted[voter], "Already voted");
 
         votes[candidates[candidateId]]++;
-        voted[msg.sender] = true;
+        voted[voter] = true;
         voterCount++;
-        emit Voted(msg.sender, candidates[candidateId]);
+    }
+    function revealVote(uint candidateId, string memory secretSalt) public {
+        require(checkWhitelist(msg.sender), "You are not in whitelist");
+        require(CommitPhase[msg.sender] != bytes32(0), "You have not committed a vote.");
+        bytes32 computedHash = keccak256(abi.encodePacked(candidateId, secretSalt));
+        require(computedHash == CommitPhase[msg.sender] , "Invalid vote");
+        require(voteOpen, "Voting has ended");
+        require(block.timestamp >= startTime && block.timestamp <= endTime, "Voting is not active");
+        _registerVote(msg.sender, candidateId);
 
-
+        RevealPhase[msg.sender] = candidateId;
+        delete CommitPhase[msg.sender];
+        emit VoteRevealed(msg.sender,candidateId);
     }
     
     function getVotes(string memory candidateName) public view returns (uint) {
